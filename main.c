@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#include <string.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -294,6 +297,28 @@ void update_zoom() {
 }
 
 int main(int argc, char *argv[]) {
+	int lock_fd = open("/tmp/xmagnify.lock", O_CREAT | O_RDWR, 0666);
+	if (lock_fd == -1) {
+		perror("Failed to open lock file");
+		return 1;
+	}
+	if (flock(lock_fd, LOCK_EX | LOCK_NB) == -1) {
+		char buf[32];
+		ssize_t n = read(lock_fd, buf, sizeof(buf) - 1);
+		if (n > 0) {
+			buf[n] = 0;
+			Window w = strtoul(buf, NULL, 10);
+			Display *dpy = XOpenDisplay(NULL);
+			if (dpy) {
+				XMapRaised(dpy, w);
+				XSetInputFocus(dpy, w, RevertToParent, CurrentTime);
+				XCloseDisplay(dpy);
+			}
+		}
+		close(lock_fd);
+		return 0;
+	}
+
 	parse_arguments(argc, argv);
 
 	init_x11();
@@ -302,10 +327,18 @@ int main(int argc, char *argv[]) {
 	if (!XFixesQueryExtension(display, &event_base, &error_base)) {
 		fprintf(stderr, "XFixes not available\n");
 		XCloseDisplay(display);
+		close(lock_fd);
+		unlink("/tmp/xmagnify.lock");
 		return 1;
 	}
 
 	create_zoom_window();
+
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%lu\n", (unsigned long)zoom_window);
+	ftruncate(lock_fd, 0);
+	lseek(lock_fd, 0, SEEK_SET);
+	write(lock_fd, buf, strlen(buf));
 
 	while (running) {
 		while (XPending(display)) {
@@ -322,5 +355,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	XCloseDisplay(display);
+	close(lock_fd);
+	unlink("/tmp/xmagnify.lock");
 	return 0;
 }
