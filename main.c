@@ -18,7 +18,11 @@ int screen;
 int screen_width, screen_height;
 int running = 1;
 int zoom_level = DEFAULT_ZOOM_LEVEL;
+int default_zoom_level;
+float current_zoom = DEFAULT_ZOOM_LEVEL;
 int window_size = DEFAULT_WINDOW_SIZE;
+int window_x;
+int window_y;
 int show_crosshairs = 0;
 int window_opacity = -1;
 int always_on_top = 0;
@@ -56,6 +60,8 @@ void parse_arguments(int argc, char *argv[]) {
 		switch (opt) {
 			case 'z':
 				zoom_level = atoi(optarg);
+				default_zoom_level = zoom_level;
+				current_zoom = zoom_level;
 				if (zoom_level <= 0) {
 					fprintf(stderr, "Error: Zoom level must be positive\n");
 					exit(1);
@@ -137,10 +143,13 @@ void set_motif_borderless() {
 }
 
 void create_zoom_window() {
+	window_x = (screen_width - window_size) / 2;
+	window_y = (screen_height - window_size) / 2;
+
 	zoom_window = XCreateSimpleWindow(
 		display,
 		RootWindow(display, screen),
-		0, 0,
+		window_x, window_y,
 		window_size, window_size,
 		1,
 		BlackPixel(display, screen),
@@ -186,10 +195,33 @@ void clamp_coordinates(int *x, int *y, int width, int height) {
 	*y = (*y > screen_height - height) ? screen_height - height : *y;
 }
 
+void move_window(int dx, int dy) {
+	window_x += dx;
+	window_y += dy;
+	clamp_coordinates(&window_x, &window_y, window_size, window_size);
+	XMoveWindow(display, zoom_window, window_x, window_y);
+}
+
 void handle_keypress(XEvent *event) {
 	KeySym keysym = XLookupKeysym(&event->xkey, 0);
 	if (keysym == XK_Escape || keysym == XK_q || keysym == XK_Q) {
 		running = 0;
+	} else if (keysym == XK_equal || keysym == XK_plus) {
+		current_zoom += 0.5;
+	} else if (keysym == XK_minus) {
+		if (current_zoom > 0.5) {
+			current_zoom -= 0.5;
+		}
+	} else if (keysym == XK_0) {
+		current_zoom = default_zoom_level;
+	} else if (keysym == XK_Left) {
+		move_window(-window_size, 0);
+	} else if (keysym == XK_Right) {
+		move_window(window_size, 0);
+	} else if (keysym == XK_Up) {
+		move_window(0, -window_size);
+	} else if (keysym == XK_Down) {
+		move_window(0, window_size);
 	}
 }
 
@@ -200,8 +232,8 @@ void update_zoom() {
 		return;
 	}
 
-	int capture_width = window_size / zoom_level;
-	int capture_height = window_size / zoom_level;
+	int capture_width = window_size / current_zoom;
+	int capture_height = window_size / current_zoom;
 	int capture_x = cursor->x - capture_width/2;
 	int capture_y = cursor->y - capture_height/2;
 
@@ -236,8 +268,8 @@ void update_zoom() {
 
 	for (int y = 0; y < window_size; y++) {
 		for (int x = 0; x < window_size; x++) {
-			int src_x = x / zoom_level;
-			int src_y = y / zoom_level;
+		int src_x = x / current_zoom;
+		int src_y = y / current_zoom;
 			XPutPixel(dest_image, x, y, XGetPixel(src_image, src_x, src_y));
 		}
 	}
