@@ -5,6 +5,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/Xfixes.h>
 #include <X11/keysym.h>
 
@@ -18,22 +19,34 @@ int screen_width, screen_height;
 int running = 1;
 int zoom_level = DEFAULT_ZOOM_LEVEL;
 int window_size = DEFAULT_WINDOW_SIZE;
+int show_crosshairs = 0;
+int window_opacity = -1;
+int always_on_top = 0;
+int borderless = 0;
 
 void print_usage(const char *program_name) {
 	printf("Usage: %s [OPTIONS]\n", program_name);
 	printf("Options:\n");
 	printf("  -z, --zoom LEVEL    Zoom level (default: %d)\n", DEFAULT_ZOOM_LEVEL);
 	printf("  -s, --size SIZE     Window size in pixels (default: %d)\n", DEFAULT_WINDOW_SIZE);
+	printf("  -c, --crosshairs    Show crosshairs at cursor location\n");
+	printf("  -o, --opacity PERC  Window opacity 0-100 (requires compositor)\n");
+	printf("  -t, --top           Always on top\n");
+	printf("  -b, --borderless    Hide window border\n");
 	printf("  -h, --help          Show this help message\n");
 	printf("  -q, --quit          Quit the application\n");
 }
 
 void parse_arguments(int argc, char *argv[]) {
 	int opt;
-	const char *short_options = "z:s:hq";
+	const char *short_options = "z:s:cho:tbq";
 	struct option long_options[] = {
 		{"zoom", required_argument, 0, 'z'},
 		{"size", required_argument, 0, 's'},
+		{"crosshairs", no_argument, 0, 'c'},
+		{"opacity", required_argument, 0, 'o'},
+		{"top", no_argument, 0, 't'},
+		{"borderless", no_argument, 0, 'b'},
 		{"help", no_argument, 0, 'h'},
 		{"quit", no_argument, 0, 'q'},
 		{0, 0, 0, 0}
@@ -54,6 +67,22 @@ void parse_arguments(int argc, char *argv[]) {
 					fprintf(stderr, "Error: Window size must be positive\n");
 					exit(1);
 				}
+				break;
+			case 'c':
+				show_crosshairs = 1;
+				break;
+			case 'o':
+				window_opacity = atoi(optarg);
+				if (window_opacity < 0 || window_opacity > 100) {
+					fprintf(stderr, "Error: Opacity must be 0-100\n");
+					exit(1);
+				}
+				break;
+			case 't':
+				always_on_top = 1;
+				break;
+			case 'b':
+				borderless = 1;
 				break;
 			case 'h':
 				print_usage(argv[0]);
@@ -78,6 +107,35 @@ void init_x11() {
 	screen_height = DisplayHeight(display, screen);
 }
 
+typedef struct {
+	unsigned long flags;
+	unsigned long functions;
+	unsigned long decorations;
+	long input_mode;
+	unsigned long status;
+} MWMHints;
+
+#define MWM_HINTS_FUNCTIONS   (1L << 0)
+#define MWM_HINTS_DECORATIONS (1L << 1)
+#define MWM_DECOR_NONE        (0L)
+
+void set_motif_borderless() {
+	Atom motif_hints = XInternAtom(display, "_MOTIF_WM_HINTS", False);
+	MWMHints hints = {
+		.flags = MWM_HINTS_DECORATIONS,
+		.functions = 0,
+		.decorations = MWM_DECOR_NONE,
+		.input_mode = 0,
+		.status = 0
+	};
+	XChangeProperty(
+		display, zoom_window,
+		motif_hints, motif_hints, 32,
+		PropModeReplace,
+		(unsigned char *)&hints, 5
+	);
+}
+
 void create_zoom_window() {
 	zoom_window = XCreateSimpleWindow(
 		display,
@@ -88,8 +146,36 @@ void create_zoom_window() {
 		BlackPixel(display, screen),
 		WhitePixel(display, screen)
 	);
+
+	if (borderless) {
+		set_motif_borderless();
+	}
+
 	XStoreName(display, zoom_window, "Xmagnify");
 	XSelectInput(display, zoom_window, KeyPressMask);
+
+	if (always_on_top) {
+		Atom wm_state = XInternAtom(display, "_NET_WM_STATE", False);
+		Atom wm_above = XInternAtom(display, "_NET_WM_STATE_ABOVE", False);
+		XChangeProperty(
+			display, zoom_window,
+			wm_state, XA_ATOM, 32,
+			PropModeReplace,
+			(unsigned char *)&wm_above, 1
+		);
+	}
+
+	if (window_opacity >= 0) {
+		Atom opacity_atom = XInternAtom(display, "_NET_WM_WINDOW_OPACITY", False);
+		unsigned int opacity = (unsigned int)((window_opacity / 100.0) * 0xFFFFFFFF);
+		XChangeProperty(
+			display, zoom_window,
+			opacity_atom, XA_CARDINAL, 32,
+			PropModeReplace,
+			(unsigned char *)&opacity, 1
+		);
+	}
+
 	XMapWindow(display, zoom_window);
 }
 
@@ -158,6 +244,14 @@ void update_zoom() {
 
 	GC gc = XCreateGC(display, zoom_window, 0, NULL);
 	XPutImage(display, zoom_window, gc, dest_image, 0, 0, 0, 0, window_size, window_size);
+
+	if (show_crosshairs) {
+		XSetForeground(display, gc, 0xFF0000);
+		XSetLineAttributes(display, gc, 1, LineSolid, CapButt, JoinMiter);
+		int center = window_size / 2;
+		XDrawLine(display, zoom_window, gc, center, 0, center, window_size);
+		XDrawLine(display, zoom_window, gc, 0, center, window_size, center);
+	}
 
 	XFreeGC(display, gc);
 	XDestroyImage(src_image);
