@@ -25,6 +25,7 @@ int default_zoom_level;
 float current_zoom = DEFAULT_ZOOM_LEVEL;
 int window_size = DEFAULT_WINDOW_SIZE;
 int original_window_size;
+int current_window_width;
 int window_x;
 int window_y;
 int fullscreen_width_mode = 0;
@@ -209,6 +210,7 @@ void move_window(int dx, int dy) {
 
 void resize_window(int new_size) {
 	window_size = new_size;
+	current_window_width = window_size;
 	XResizeWindow(display, zoom_window, window_size, window_size);
 	if (fullscreen_width_mode) {
 		window_x = 0;
@@ -224,9 +226,11 @@ void resize_window(int new_size) {
 void toggle_fullscreen_width() {
 	fullscreen_width_mode = !fullscreen_width_mode;
 	if (fullscreen_width_mode) {
+		current_window_width = screen_width;
 		XResizeWindow(display, zoom_window, screen_width, window_size);
 		XMoveWindow(display, zoom_window, 0, screen_height - window_size);
 	} else {
+		current_window_width = window_size;
 		XResizeWindow(display, zoom_window, window_size, window_size);
 		window_x = (screen_width - window_size) / 2;
 		window_y = (screen_height - window_size) / 2;
@@ -293,7 +297,7 @@ void update_zoom() {
 		return;
 	}
 
-	int capture_width = window_size / current_zoom;
+	int capture_width = current_window_width / current_zoom;
 	int capture_height = window_size / current_zoom;
 	int capture_x = cursor->x - capture_width/2;
 	int capture_y = cursor->y - capture_height/2;
@@ -321,14 +325,14 @@ void update_zoom() {
 		DefaultDepth(display, screen),
 		ZPixmap,
 		0,
-		malloc(window_size * window_size * 4),
-		window_size, window_size,
+		malloc(current_window_width * window_size * 4),
+		current_window_width, window_size,
 		32,
 		0
 	);
 
 	for (int y = 0; y < window_size; y++) {
-		for (int x = 0; x < window_size; x++) {
+		for (int x = 0; x < current_window_width; x++) {
 		int src_x = x / current_zoom;
 		int src_y = y / current_zoom;
 			XPutPixel(dest_image, x, y, XGetPixel(src_image, src_x, src_y));
@@ -336,14 +340,16 @@ void update_zoom() {
 	}
 
 	GC gc = XCreateGC(display, zoom_window, 0, NULL);
-	XPutImage(display, zoom_window, gc, dest_image, 0, 0, 0, 0, window_size, window_size);
+	XPutImage(display, zoom_window, gc, dest_image, 0, 0, 0, 0, current_window_width, window_size);
 
 	if (show_crosshairs) {
 		XSetForeground(display, gc, 0xFF0000);
 		XSetLineAttributes(display, gc, 1, LineSolid, CapButt, JoinMiter);
-		int center = window_size / 2;
-		XDrawLine(display, zoom_window, gc, center, 0, center, window_size);
-		XDrawLine(display, zoom_window, gc, 0, center, window_size, center);
+		int center_x = current_window_width / 2;
+		int center_y = window_size / 2;
+		int half = 25;
+		XDrawLine(display, zoom_window, gc, center_x, center_y - half, center_x, center_y + half);
+		XDrawLine(display, zoom_window, gc, center_x - half, center_y, center_x + half, center_y);
 	}
 
 	XFreeGC(display, gc);
@@ -379,6 +385,7 @@ int main(int argc, char *argv[]) {
 
 	parse_arguments(argc, argv);
 	original_window_size = window_size;
+	current_window_width = window_size;
 
 	init_x11();
 
