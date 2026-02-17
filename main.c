@@ -345,11 +345,13 @@ void update_zoom() {
 	if (show_crosshairs) {
 		XSetForeground(display, gc, 0xFF0000);
 		XSetLineAttributes(display, gc, 1, LineSolid, CapButt, JoinMiter);
-		int center_x = current_window_width / 2;
-		int center_y = window_size / 2;
+		int cursor_rel_x = cursor->x - capture_x;
+		int cursor_rel_y = cursor->y - capture_y;
+		int crosshair_x = cursor_rel_x * current_zoom;
+		int crosshair_y = cursor_rel_y * current_zoom;
 		int half = 25;
-		XDrawLine(display, zoom_window, gc, center_x, center_y - half, center_x, center_y + half);
-		XDrawLine(display, zoom_window, gc, center_x - half, center_y, center_x + half, center_y);
+		XDrawLine(display, zoom_window, gc, crosshair_x, crosshair_y - half, crosshair_x, crosshair_y + half);
+		XDrawLine(display, zoom_window, gc, crosshair_x - half, crosshair_y, crosshair_x + half, crosshair_y);
 	}
 
 	XFreeGC(display, gc);
