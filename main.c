@@ -207,24 +207,41 @@ void move_window(int dx, int dy) {
 
 void handle_keypress(XEvent *event) {
 	KeySym keysym = XLookupKeysym(&event->xkey, 0);
-	if (keysym == XK_Escape || keysym == XK_q || keysym == XK_Q) {
-		running = 0;
-	} else if (keysym == XK_equal || keysym == XK_plus) {
-		current_zoom += 0.5;
-	} else if (keysym == XK_minus) {
-		if (current_zoom > 0.5) {
-			current_zoom -= 0.5;
-		}
-	} else if (keysym == XK_0) {
-		current_zoom = default_zoom_level;
-	} else if (keysym == XK_Left) {
-		move_window(-window_size, 0);
-	} else if (keysym == XK_Right) {
-		move_window(window_size, 0);
-	} else if (keysym == XK_Up) {
-		move_window(0, -window_size);
-	} else if (keysym == XK_Down) {
-		move_window(0, window_size);
+	switch (keysym) {
+		case XK_Escape:
+		case XK_q:
+		case XK_Q:
+			running = 0;
+			break;
+		case XK_0:
+			current_zoom = default_zoom_level;
+			break;
+		case XK_equal:
+		case XK_plus:
+		case XK_a:
+		case XK_A:
+			current_zoom += 0.5;
+			break;
+		case XK_minus:
+		case XK_z:
+		case XK_Z:
+			if (current_zoom > 1.5) {
+				current_zoom -= 0.5;
+			}
+			break;
+		case XK_Left:
+			move_window(-window_size, 0);
+			break;
+		case XK_Right:
+			move_window(window_size, 0);
+			break;
+		case XK_Up:
+			move_window(0, -window_size);
+			break;
+		case XK_Down:
+			move_window(0, window_size);
+			break;
+			break;
 	}
 }
 
