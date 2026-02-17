@@ -24,8 +24,10 @@ int zoom_level = DEFAULT_ZOOM_LEVEL;
 int default_zoom_level;
 float current_zoom = DEFAULT_ZOOM_LEVEL;
 int window_size = DEFAULT_WINDOW_SIZE;
+int original_window_size;
 int window_x;
 int window_y;
+int fullscreen_width_mode = 0;
 int show_crosshairs = 0;
 int window_opacity = -1;
 int always_on_top = 0;
@@ -205,6 +207,33 @@ void move_window(int dx, int dy) {
 	XMoveWindow(display, zoom_window, window_x, window_y);
 }
 
+void resize_window(int new_size) {
+	window_size = new_size;
+	XResizeWindow(display, zoom_window, window_size, window_size);
+	if (fullscreen_width_mode) {
+		window_x = 0;
+		window_y = screen_height - window_size;
+		XMoveWindow(display, zoom_window, window_x, window_y);
+	} else {
+		window_x = (screen_width - window_size) / 2;
+		window_y = (screen_height - window_size) / 2;
+		XMoveWindow(display, zoom_window, window_x, window_y);
+	}
+}
+
+void toggle_fullscreen_width() {
+	fullscreen_width_mode = !fullscreen_width_mode;
+	if (fullscreen_width_mode) {
+		XResizeWindow(display, zoom_window, screen_width, window_size);
+		XMoveWindow(display, zoom_window, 0, screen_height - window_size);
+	} else {
+		XResizeWindow(display, zoom_window, window_size, window_size);
+		window_x = (screen_width - window_size) / 2;
+		window_y = (screen_height - window_size) / 2;
+		XMoveWindow(display, zoom_window, window_x, window_y);
+	}
+}
+
 void handle_keypress(XEvent *event) {
 	KeySym keysym = XLookupKeysym(&event->xkey, 0);
 	switch (keysym) {
@@ -240,6 +269,18 @@ void handle_keypress(XEvent *event) {
 			break;
 		case XK_Down:
 			move_window(0, window_size);
+			break;
+		case XK_w:
+		case XK_W:
+			toggle_fullscreen_width();
+			break;
+		case XK_d:
+		case XK_D:
+			resize_window(window_size * 2);
+			break;
+		case XK_s:
+		case XK_S:
+			resize_window(original_window_size);
 			break;
 			break;
 	}
@@ -337,6 +378,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	parse_arguments(argc, argv);
+	original_window_size = window_size;
 
 	init_x11();
 
