@@ -33,6 +33,8 @@ int show_crosshairs = 0;
 int window_opacity = -1;
 int always_on_top = 0;
 int borderless = 0;
+int window_at_top = 0;
+int current_window_y = 0;
 
 void print_usage(const char *program_name) {
 	printf("Usage: %s [OPTIONS]\n", program_name);
@@ -225,11 +227,13 @@ void resize_window(int new_size) {
 
 void toggle_fullscreen_width() {
 	fullscreen_width_mode = !fullscreen_width_mode;
+	window_at_top = 0;
 	if (fullscreen_width_mode) {
 		current_window_width = screen_width;
 		int max_height = screen_height * 30 / 100;
 		int height = (window_size > max_height) ? max_height : window_size;
 		XResizeWindow(display, zoom_window, screen_width, height);
+		current_window_y = screen_height - height;
 		XMoveWindow(display, zoom_window, 0, screen_height - height);
 	} else {
 		current_window_width = window_size;
@@ -297,6 +301,23 @@ void update_zoom() {
 	if (!cursor) {
 		fprintf(stderr, "Failed to get cursor position\n");
 		return;
+	}
+
+	if (fullscreen_width_mode) {
+		int max_height = screen_height * 30 / 100;
+		int window_height = (window_size > max_height) ? max_height : window_size;
+
+		int cursor_in_top_half = (cursor->y < screen_height / 2);
+
+		if (cursor_in_top_half && window_at_top) {
+			current_window_y = screen_height - window_height;
+			XMoveWindow(display, zoom_window, 0, screen_height - window_height);
+			window_at_top = 0;
+		} else if (!cursor_in_top_half && !window_at_top) {
+			current_window_y = 0;
+			XMoveWindow(display, zoom_window, 0, 0);
+			window_at_top = 1;
+		}
 	}
 
 	int capture_width = current_window_width / current_zoom;
