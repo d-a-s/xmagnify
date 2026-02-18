@@ -227,8 +227,10 @@ void toggle_fullscreen_width() {
 	fullscreen_width_mode = !fullscreen_width_mode;
 	if (fullscreen_width_mode) {
 		current_window_width = screen_width;
-		XResizeWindow(display, zoom_window, screen_width, window_size);
-		XMoveWindow(display, zoom_window, 0, screen_height - window_size);
+		int max_height = screen_height * 30 / 100;
+		int height = (window_size > max_height) ? max_height : window_size;
+		XResizeWindow(display, zoom_window, screen_width, height);
+		XMoveWindow(display, zoom_window, 0, screen_height - height);
 	} else {
 		current_window_width = window_size;
 		XResizeWindow(display, zoom_window, window_size, window_size);
